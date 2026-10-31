@@ -411,23 +411,22 @@ def m_inboundPortForwarding(ctx: Ctx) -> Optional[Dict[str, Any]]:
     return {"portForwardingRules": rules}
 
 
-def flow_process(ctx: Ctx, url: Dict[str, Any], source: Dict[str, Any]) -> bool:
-    """urlClassificationConfig.flowProcess as a boolean (10.0.0 template: required, default true = WebCC treatment of all requests).
+def flow_process(url: Dict[str, Any], source: Dict[str, Any]) -> Tuple[bool, Optional[Tuple[str, str]]]:
+    """urlClassificationConfig.flowProcess as a boolean, with the (disposition, note) to ledger when the section is written.
 
-    /validate on Orchestrator 10.0.0 answers "Secure Web Services Config - Not valid value: flowProcess." when the key is missing
-    or not a boolean, so the value is normalised here. An appliance on ECOS before 10.0 does not report it: the default is written.
-    A 9.x target drops the key again (not in its default template)."""
-    target = "secureWebServicesConfig.urlClassificationConfig.flowProcess"
+    The 10.0.0 default template marks it required (true: WebCC treatment of all requests, the default; false: first request only).
+    Orchestrator 10.0.0 /validate answers "Secure Web Services Config - Not valid value: flowProcess." when it is null or missing;
+    true, false and the text "true"/"false" are accepted (lab, 10.0.0.40724, 2026-10-31). GET /secureWebServicesConfig of an
+    appliance on ECOS 9.7.2 behind that Orchestrator holds flowProcess: null, so the default is written. A 9.x target drops the key
+    again (not in its default template)."""
     raw = url.get("flowProcess", source.get("flowProcess"))
     if isinstance(raw, bool):
-        return raw
+        return raw, None
     if isinstance(raw, str) and raw.strip().lower() in ("true", "false"):
-        return raw.strip().lower() == "true"
+        return raw.strip().lower() == "true", None
     if raw is None:
-        ctx.note("secure-web-services", "mapped", target, "the appliance does not report flowProcess (ECOS before 10.0?): written true, the default template value (WebCC treatment of all requests)")
-        return True
-    ctx.note("secure-web-services", "not-readable", target, "flowProcess read as {!r}, not a boolean: written true, the default template value; check the WebCC treatment (all requests / first request) by hand".format(raw))
-    return True
+        return True, ("mapped", "the appliance reports no flowProcess value (null or absent: ECOS before 10.0): written true, the default template value (WebCC treatment of all requests)")
+    return True, ("not-readable", "flowProcess read as {!r}, not a boolean: written true, the default template value; check the WebCC treatment (all requests / first request) by hand".format(raw))
 
 
 def m_secureWebServicesConfig(ctx: Ctx) -> Optional[Dict[str, Any]]:
@@ -440,11 +439,13 @@ def m_secureWebServicesConfig(ctx: Ctx) -> Optional[Dict[str, Any]]:
     url_defaults = {"hasURLClassification": False, "incrementalUpdate": False, "queryOnMiss": False, "urlReputation": 1}  # default template values
     ip_defaults = {"hasIPReputation": False, "incrementalUpdate": False}
     url_value = {k: v for k, v in (url or {}).items() if k != "flowProcess"}
-    flow = flow_process(ctx, url or {}, source) if url is not None else True
+    flow, flow_note = flow_process(url or {}, source) if url is not None else (True, None)
     if not source.get("hasSecureWebServicesConfig") and url_value in ({}, url_defaults) and (ip or {}) in ({}, ip_defaults) and flow is True:
         ctx.note("secure-web-services", "default-omitted", "secureWebServicesConfig", "feature not configured")
         return None
     url_value["flowProcess"] = flow
+    if flow_note:
+        ctx.note("secure-web-services", flow_note[0], "secureWebServicesConfig.urlClassificationConfig.flowProcess", flow_note[1])
     ctx.note("secure-web-services", "mapped", "secureWebServicesConfig", "url classification and IP reputation")
     return {"urlClassificationConfig": url_value, "ipReputationConfig": dict(ip or ip_defaults)}
 

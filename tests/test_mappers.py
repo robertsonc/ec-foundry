@@ -139,6 +139,9 @@ class MapperRules(unittest.TestCase):
         c, notes = ctx(src(url))  # ECOS before 10.0: no flowProcess in the read
         self.assertIs(m_secureWebServicesConfig(c)["urlClassificationConfig"]["flowProcess"], True)
         self.assertTrue(any(n["disposition"] == "mapped" and n["target"].endswith(".flowProcess") and "default" in n["note"] for n in notes))
+        c, notes = ctx(src(dict(url, flowProcess=None)))  # what Orchestrator 10.0.0.40724 returns for an ECOS 9.7.2 appliance (lab, 2026-10-31)
+        self.assertIs(m_secureWebServicesConfig(c)["urlClassificationConfig"]["flowProcess"], True)
+        self.assertTrue(any(n["target"].endswith(".flowProcess") for n in notes))
         self.assertIs(m_secureWebServicesConfig(ctx(src(dict(url, flowProcess=False)))[0])["urlClassificationConfig"]["flowProcess"], False)
         self.assertIs(m_secureWebServicesConfig(ctx(src(dict(url, flowProcess="false")))[0])["urlClassificationConfig"]["flowProcess"], False)
         self.assertIs(m_secureWebServicesConfig(ctx(src(dict(url, flowProcess=None)))[0])["urlClassificationConfig"]["flowProcess"], True)
@@ -149,6 +152,9 @@ class MapperRules(unittest.TestCase):
         # an all-default section of a 10.0 appliance (flowProcess true in the read) is still omitted
         default = dict(url, urlReputation=1, flowProcess=True)
         c, notes = ctx(src(default))
+        self.assertIsNone(m_secureWebServicesConfig(c))
+        self.assertEqual([n["disposition"] for n in notes], ["default-omitted"])
+        c, notes = ctx(src(dict(default, flowProcess=None)))  # all default with a null flowProcess: omitted, no flowProcess line (the section is not written)
         self.assertIsNone(m_secureWebServicesConfig(c))
         self.assertEqual([n["disposition"] for n in notes], ["default-omitted"])
         self.assertIs(m_secureWebServicesConfig(ctx(src(dict(default, flowProcess=False)))[0])["urlClassificationConfig"]["flowProcess"], False)  # first-request only is a setting

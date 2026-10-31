@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.3 (2026-10-31)
+
+- **`flowProcess` on Orchestrator 10.0.0**: `build` against a 10.0.0 Orchestrator failed `/validate` with `HTTP 400: Secure Web Services Config - Not valid value: flowProcess.` whenever a `secureWebServicesConfig` section was written for an appliance whose read has no `urlClassificationConfig.flowProcess` (ECOS before 10.0) or a non-boolean one. The 10.0.0 default template marks the key required (`true`: WebCC treatment of all requests, the default; `false`: first request only). The mapper now always writes it as a boolean: the appliance's value, `"true"`/`"false"` text as a boolean, or `true` with a `mapped` ledger line when the read has none and a `not-readable` line when the value is something else. A 9.x target still drops the key (not in its template). An all-default section read from a 10.0 appliance (which reports `flowProcess: true`) is now omitted like one from an older appliance, instead of being written because of that key.
+
 ## 1.3.2 (2026-10-28)
 
 - **Routes with next hop 0.0.0.0 or :: lose their interface** (`docs/decisions/0016`): a local route (`localRoutes`, `segmentLocalRoutes`) with next hop `0.0.0.0` or `::` and a named interface is now written without `interfaceName`, whatever the source or target ECOS, and ledgered `mapped` with prefix, interface and segment. The interface has no effect, and ECOS 9.7+ rejects it on apply. The route's zone is written as the source has it; the appliance shows such a route with zone none (ECOS ignores a zone on a route without an interface), where the interface route showed the interface's zone. 1.3.0 left such routes out (ledgered unresolved) for a 9.7+ or unknown target ECOS, and kept the interface before 9.7. Two routes that become the same are written once, with a ledger line. `--target-ecos` is still accepted and recorded in `build.json`, `ledger.json` and `summary.md`, but no rule depends on it at present; the summary's unknown line says so.

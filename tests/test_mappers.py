@@ -131,6 +131,34 @@ class MapperRules(unittest.TestCase):
         self.assertIsNone(m_secureWebServicesConfig(ctx(src(url))[0]))
         self.assertEqual(m_secureWebServicesConfig(ctx(src(dict(url, urlReputation=4)))[0])["urlClassificationConfig"]["urlReputation"], 4)
 
+    def test_secure_web_services_flow_process_is_a_boolean(self):
+        # Orchestrator 10.0.0 /validate: "Secure Web Services Config - Not valid value: flowProcess." when the key is missing or not a boolean
+        url = {"hasURLClassification": False, "incrementalUpdate": False, "queryOnMiss": False, "urlReputation": 4}
+        ip = {"hasIPReputation": False, "incrementalUpdate": False}
+        src = lambda u, **top: {"secure-web-services": {"secureWebServicesConfig": dict({"hasSecureWebServicesConfig": False, "urlClassificationConfig": u, "ipReputationConfig": ip}, **top)}}
+        c, notes = ctx(src(url))  # ECOS before 10.0: no flowProcess in the read
+        self.assertIs(m_secureWebServicesConfig(c)["urlClassificationConfig"]["flowProcess"], True)
+        self.assertTrue(any(n["disposition"] == "mapped" and n["target"].endswith(".flowProcess") and "default" in n["note"] for n in notes))
+        self.assertIs(m_secureWebServicesConfig(ctx(src(dict(url, flowProcess=False)))[0])["urlClassificationConfig"]["flowProcess"], False)
+        self.assertIs(m_secureWebServicesConfig(ctx(src(dict(url, flowProcess="false")))[0])["urlClassificationConfig"]["flowProcess"], False)
+        self.assertIs(m_secureWebServicesConfig(ctx(src(dict(url, flowProcess=None)))[0])["urlClassificationConfig"]["flowProcess"], True)
+        self.assertIs(m_secureWebServicesConfig(ctx(src(url, flowProcess=False))[0])["urlClassificationConfig"]["flowProcess"], False)  # key next to the wrappers
+        c, notes = ctx(src(dict(url, flowProcess="all")))
+        self.assertIs(m_secureWebServicesConfig(c)["urlClassificationConfig"]["flowProcess"], True)
+        self.assertTrue(any(n["disposition"] == "not-readable" and "'all'" in n["note"] for n in notes))
+        # an all-default section of a 10.0 appliance (flowProcess true in the read) is still omitted
+        default = dict(url, urlReputation=1, flowProcess=True)
+        c, notes = ctx(src(default))
+        self.assertIsNone(m_secureWebServicesConfig(c))
+        self.assertEqual([n["disposition"] for n in notes], ["default-omitted"])
+        self.assertIs(m_secureWebServicesConfig(ctx(src(dict(default, flowProcess=False)))[0])["urlClassificationConfig"]["flowProcess"], False)  # first-request only is a setting
+        # the written section always carries the key; prune() drops it for a 9.x target
+        written = m_secureWebServicesConfig(ctx(src(url))[0])
+        ledger = []
+        pruned = prune({"secureWebServicesConfig": written}, allowed_paths("9.7.1.42046"), ledger)
+        self.assertNotIn("flowProcess", pruned["secureWebServicesConfig"]["urlClassificationConfig"])
+        self.assertIn("flowProcess", prune({"secureWebServicesConfig": written}, allowed_paths("10.0.0.40516"), [])["secureWebServicesConfig"]["urlClassificationConfig"])
+
     def test_cli_sections(self):
         self.assertEqual(passthrough_max_bandwidth(["hostname x", "interface pass-through max-bandwidth 50000"]), 50000)
         self.assertIsNone(passthrough_max_bandwidth(["hostname x"]))

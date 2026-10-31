@@ -8,7 +8,7 @@ Measured empirically via `tests/harnesses/probes.py` (probes), `tests/harnesses/
 
 `/validate` is a non-saving `POST` endpoint (`read_only=True`). It stops at the first error and verifies:
 1. **YAML syntax & release schema:** Rejects unknown sections or fields (`YAML invalid, Unrecognized field: "..."`), including fields from older (`9.6.4` `nac.server[].address`) or newer (`10.0.0` `ikePqcgroup`, `ipsecPqcgroup`, `flowProcess`) Orchestrator releases.
-2. **Scalar & collection types:** Verifies integers, booleans, enums, IP/subnet formats, and whether a section expects a mapping vs. a list (e.g., `dhcpRemoteAddressPoolConfig` must be a mapping, whereas `natPools` and `multicast` are lists).
+2. **Scalar & collection types:** Verifies integers, booleans, enums, IP/subnet formats, and whether a section expects a mapping vs. a list (e.g., `dhcpRemoteAddressPoolConfig` must be a mapping, whereas `natPools` and `multicast` are lists). On `10.0.0`, `secureWebServicesConfig.urlClassificationConfig.flowProcess` must be present and boolean, else `Secure Web Services Config - Not valid value: flowProcess.` (the mapper writes the appliance's value or the default `true`).
 3. **Serial number format (`serialNum`):** If provided in the top-level JSON wrapper, must be 12 hexadecimal characters (`^[0-9A-Fa-f]{12}$`, e.g., `001BBC462D3D` — hyphens/colons like `00-1B-BC-46-2D-3D` are rejected unless normalized first via `common.normalize_serial`).
 4. **Live object existence on the validating Orchestrator:**
    - `applianceInfo.group` -> must exist in `GET /gms/group`
